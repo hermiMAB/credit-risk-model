@@ -1,0 +1,19 @@
+# Data Manipulation & Computation
+pandas==2.2.0
+numpy==1.26.4
+
+# Exploratory Data Analysis
+matplotlib==3.8.2
+seaborn==0.13.2
+
+# Machine Learning & Feature Engineering
+scikit-learn==1.4.0
+category-encoders==2.6.3
+
+# MLOps & Tracking
+dvc==3.48.4
+mlflow==2.10.2
+
+# Model API Deployment (Task 6 prep)
+fastapi==0.109.2
+uvicorn==0.27.1
