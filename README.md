@@ -1,5 +1,9 @@
 # Credit Scoring & Risk Management: Business Understanding
 
+## Data Source
+The dataset utilized for this credit scoring project originates from the **Xente Fraud Detection Challenge** (hosted on Zindi/Kaggle). It contains approximately 95,662 eCommerce transaction logs, which have been repurposed in this repository to engineer a behavioral risk proxy and predict credit default likelihood for Bati Bank's Buy-Now-Pay-Later (BNPL) service.
+
+*Note: Due to file size constraints and strict version control practices, the raw dataset (`data.csv`) is tracked locally via DVC and is not hosted directly in this GitHub repository.*
 This document outlines the core business and regulatory considerations for developing credit scoring models, specifically addressing the requirements of the Basel II framework, the use of proxy variables in low-data environments, and the critical trade-offs between model interpretability and predictive performance.
 
 ---
