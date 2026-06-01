@@ -1,2 +1,41 @@
-data/*.csv
-.venv
+# ==============================================================================
+# DATA AND MODEL ARTIFACTS
+# ==============================================================================
+# Prevents massive datasets and model weights from being tracked
+data/
+artifacts/
+models/
+*.csv
+*.parquet
+*.pkl
+*.h5
+*.joblib
+
+# ==============================================================================
+# MLFLOW AND EXPERIMENT TRACKING
+# ==============================================================================
+# Excludes local MLflow logging databases and artifact repositories
+mlruns/
+mlflow.db
+.mlflow/
+
+# ==============================================================================
+# PYTHON CACHING & ENVIRONMENT
+# ==============================================================================
+# Cleans up temporary bytecode and virtual environment directories
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+.pytest_cache/
+
+# ==============================================================================
+# SECRETS AND CONFIGURATIONS
+# ==============================================================================
+# Essential for safeguarding credentials, API keys, and environment tokens
+.env
+.env.*
+secrets.json
+.ipynb_checkpoints/
