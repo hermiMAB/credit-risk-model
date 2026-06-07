@@ -8,12 +8,14 @@ from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.model_selection import train_test_split
+from sklearn.cluster import KMeans  # <-- ADDED IMPORT
 import category_encoders as ce
-import pandas as pd
-import numpy as np
+import joblib
+
 
 def generate_iv_report(df: pd.DataFrame, target_col: str, categorical_cols: list) -> pd.DataFrame:
     """Calculates the Information Value (IV) for categorical features."""
+    iv_results = []
     
     # Total counts of fraud (1) and normal (0)
     total_fraud = (df[target_col] == 1).sum()
@@ -51,10 +53,54 @@ def generate_iv_report(df: pd.DataFrame, target_col: str, categorical_cols: list
         
     # Return a nicely sorted DataFrame
     return pd.DataFrame(iv_results).sort_values(by='IV_Score', ascending=False)
+
+
+# ==========================================
+# 0. TARGET VARIABLE GENERATION (TASK 4)
+# ==========================================
+
+def generate_proxy_target(df: pd.DataFrame) -> pd.DataFrame:
+    """Calculates RFM, clusters customers, and generates the is_high_risk label."""
+    print("Engineering 'is_high_risk' proxy target via K-Means...")
+    
+    # 1. Calculate RFM
+    df['TransactionStartTime'] = pd.to_datetime(df['TransactionStartTime'])
+    snapshot_date = df['TransactionStartTime'].max() + pd.Timedelta(days=1)
+    
+    rfm = df.groupby('CustomerId').agg({
+        'TransactionStartTime': lambda x: (snapshot_date - x.max()).days,
+        'TransactionId': 'count',
+        'Amount': 'sum'
+    }).reset_index()
+    
+    rfm.rename(columns={
+        'TransactionStartTime': 'Recency',
+        'TransactionId': 'Frequency',
+        'Amount': 'Monetary'
+    }, inplace=True)
+    
+    # 2. Scale and Cluster
+    scaler = StandardScaler()
+    rfm_scaled = scaler.fit_transform(rfm[['Recency', 'Frequency', 'Monetary']])
+    
+    kmeans = KMeans(n_clusters=3, random_state=42, n_init=10)
+    rfm['Cluster'] = kmeans.fit_predict(rfm_scaled)
+    
+    # 3. Identify the worst cluster (High Recency, Low Frequency)
+    cluster_stats = rfm.groupby('Cluster')[['Recency', 'Frequency', 'Monetary']].mean()
+    worst_cluster = cluster_stats.sort_values(
+        by=['Recency', 'Frequency'], ascending=[False, True]
+    ).index[0]
+    
+    # 4. Assign label and merge back to main dataframe
+    rfm['is_high_risk'] = (rfm['Cluster'] == worst_cluster).astype(int)
+    
+    return df.merge(rfm[['CustomerId', 'is_high_risk']], on='CustomerId', how='left')
+
+
 # ==========================================
 # 1. CUSTOM TRANSFORMERS FOR FEATURE ENGINEERING
 # ==========================================
-# (These remain exactly the same as before)
 
 class TimeFeatureExtractor(BaseEstimator, TransformerMixin):
     def __init__(self, time_col='TransactionStartTime'):
@@ -104,22 +150,24 @@ class CustomerAggregator(BaseEstimator, TransformerMixin):
         self.target_col = target_col
 
     def fit(self, X, y=None):
-        self.agg_df_ = X.groupby(self.id_col)[self.target_col].agg(
+        agg = X.groupby(self.id_col)[self.target_col].agg(
             Total_Amount='sum',
             Median_Amount='median',
             Transaction_Count='count',
             Std_Dev_Amount='std'
         ).fillna(0).reset_index()
+        
+        # ---> THE FIX: Convert to native Python dictionary to avoid Pandas pickling bugs! <---
+        self.agg_dict_ = agg.to_dict('records')
         return self
 
     def transform(self, X):
-# 1. Save the original shuffled index
         original_index = X.index 
         
-        # 2. Perform the merge (which resets the index)
-        X_out = X.merge(self.agg_df_, on=self.id_col, how='left')
+        # Rebuild the dataframe on the fly
+        agg_df = pd.DataFrame(self.agg_dict_)
         
-        # 3. Put the original index back!
+        X_out = X.merge(agg_df, on=self.id_col, how='left')
         X_out.index = original_index
         new_cols = ['Total_Amount', 'Median_Amount', 'Transaction_Count', 'Std_Dev_Amount']
         X_out[new_cols] = X_out[new_cols].fillna(0)
@@ -139,16 +187,10 @@ class DropUselessColumns(BaseEstimator, TransformerMixin):
 
 
 # ==========================================
-# 2. MASTER PIPELINE ARCHITECTURE (UPDATED)
+# 2. MASTER PIPELINE ARCHITECTURE
 # ==========================================
 
 def build_data_pipeline(use_woe=True):
-    """
-    Builds and returns the complete sklearn data processing pipeline.
-    Args:
-        use_woe (bool): If True, uses Weight of Evidence encoding. 
-                        If False, uses One-Hot Encoding.
-    """
     numeric_features = [
         'Amount', 'Value', 
         'Total_Amount', 'Median_Amount', 'Transaction_Count', 'Std_Dev_Amount', 
@@ -157,19 +199,14 @@ def build_data_pipeline(use_woe=True):
     
     categorical_features = ['ProviderId', 'ProductId', 'ProductCategory', 'ChannelId', 'PricingStrategy']
 
-    # Numeric Track
     numeric_transformer = Pipeline(steps=[
         ('imputer', SimpleImputer(strategy='median')),
         ('scaler', StandardScaler())
     ])
 
-    # Categorical Track Toggle Logic
     if use_woe:
-        # Use Weight of Evidence
         encoder_step = ('encoder', ce.WOEEncoder())
     else:
-        # Use One-Hot Encoding. sparse_output=False is required to output pandas DataFrames nicely.
-        # handle_unknown='ignore' prevents crashes if a new category appears in the test set.
         encoder_step = ('encoder', OneHotEncoder(sparse_output=False, handle_unknown='ignore'))
 
     categorical_transformer = Pipeline(steps=[
@@ -210,24 +247,31 @@ if __name__ == "__main__":
         print(f"Loading raw data from: {raw_data_path}")
         df = pd.read_csv(raw_data_path)
         
-        X = df.drop(columns=['FraudResult'])
-        y = df['FraudResult']
+        # ---> TASK 4 UPDATE: GENERATE PROXY TARGET <---
+        df = generate_proxy_target(df)
+        
+        # ---> TASK 4 UPDATE: DROP FRAUD, USE PROXY AS TARGET <---
+        cols_to_drop = ['is_high_risk']
+        if 'FraudResult' in df.columns:
+            cols_to_drop.append('FraudResult')
+            
+        X = df.drop(columns=cols_to_drop)
+        y = df['is_high_risk']
         
         print("Splitting data to prevent data leakage...")
         X_train, X_test, y_train, y_test = train_test_split(
             X, y, test_size=0.2, stratify=y, random_state=42
         )
         
-        # ---> THE TOGGLE IS HERE <---
-        # Try changing this to use_woe=False to test One-Hot Encoding!
         print("Building and fitting the pipeline...")
         pipeline = build_data_pipeline(use_woe=True) 
         
         X_train_processed = pipeline.fit_transform(X_train, y_train)
         X_test_processed = pipeline.transform(X_test)
         
-        X_train_processed['FraudResult'] = y_train.values
-        X_test_processed['FraudResult'] = y_test.values
+        # ---> TASK 4 UPDATE: RE-ATTACH THE NEW TARGET <---
+        X_train_processed['is_high_risk'] = y_train.values
+        X_test_processed['is_high_risk'] = y_test.values
         
         os.makedirs(output_dir, exist_ok=True)
         train_path = output_dir / 'train_processed.csv'
@@ -236,8 +280,11 @@ if __name__ == "__main__":
         X_train_processed.to_csv(train_path, index=False)
         X_test_processed.to_csv(test_path, index=False)
         
-        # Show a quick summary of the columns generated
+        joblib.dump(pipeline, output_dir / 'data_pipeline.joblib')
+        print(f"Pipeline safely saved to: {output_dir / 'data_pipeline.joblib'}")       
+        
         print(f"\nSuccess! Pipeline ran with {X_train_processed.shape[1] - 1} features generated.")
+        print(f"Target Variable is now: 'is_high_risk'")
         print(f"Saved to:\n - {train_path}\n - {test_path}")
         
     except FileNotFoundError:
