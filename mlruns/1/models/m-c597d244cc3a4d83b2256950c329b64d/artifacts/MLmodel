@@ -1,0 +1,23 @@
+artifact_path: file:///C:/Users/Hermela/Desktop/10academy/Week4/mlruns/1/models/m-c597d244cc3a4d83b2256950c329b64d/artifacts
+flavors:
+  python_function:
+    env:
+      conda: conda.yaml
+      virtualenv: python_env.yaml
+    loader_module: mlflow.sklearn
+    model_path: model.pkl
+    predict_fn: predict
+    python_version: 3.12.1
+  sklearn:
+    code: null
+    pickled_model: model.pkl
+    serialization_format: cloudpickle
+    sklearn_version: 1.8.0
+    skops_trusted_types: null
+mlflow_version: 3.13.0
+model_id: m-c597d244cc3a4d83b2256950c329b64d
+model_size_bytes: 1221
+model_uuid: m-c597d244cc3a4d83b2256950c329b64d
+prompts: null
+run_id: 5d66c73ba0da4ddda932448f89efcd10
+utc_time_created: '2026-06-07 10:13:31.945492'

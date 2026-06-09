@@ -1,0 +1,33 @@
+.venv
+# Git and IDE files
+.git
+.gitignore
+.vscode/
+.idea/
+
+# Python Cache & Bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual Environments (This is likely your 1GB culprit!)
+venv/
+.venv/
+env/
+.env
+
+# Jupyter Notebooks
+*.ipynb
+.ipynb_checkpoints/
+
+# Raw Data (Keep the models, ignore the heavy datasets)
+*.csv
+*.xlsx
+*.parquet
+data/raw/
+data/processed/
+
+# Logs and MLflow tracking data (if saved locally)
+mlruns/
+*.log
