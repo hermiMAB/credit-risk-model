@@ -94,7 +94,16 @@ class DropUselessColumns(BaseEstimator, TransformerMixin):
     def transform(self, X):
         return X.drop(columns=[col for col in self.cols_to_drop if col in X.columns])
 
+# --- UVICORN PICKLE FIX ---
+import sys
+setattr(sys.modules['__main__'], 'TimeFeatureExtractor', TimeFeatureExtractor)
+setattr(sys.modules['__main__'], 'OutlierCapper', OutlierCapper)
+setattr(sys.modules['__main__'], 'CustomerAggregator', CustomerAggregator)
+setattr(sys.modules['__main__'], 'DropUselessColumns', DropUselessColumns)
 
+# ==========================================
+# 1. BUSINESS LOGIC
+# ==========================================
 # ==========================================
 # 1. BUSINESS LOGIC
 # ==========================================
